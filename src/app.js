@@ -1,106 +1,70 @@
 const express = require("express");
-const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
-require("dotenv").config();
+const cors = require("cors");
+const bodyParser = require("body-parser");
 
 const app = express();
-const PORT = process.env.PORT || 7777;
-const url = process.env.MONGO_URI;
-const dbName = "notesApp";
-let db;
+const PORT = 5000;
 
 // Middleware
-app.use(cors({ origin: "https://notes-app-v6x7.onrender.com" }));
-app.use(express.json());
+app.use(cors());
+app.use(bodyParser.json());
 
-// Database Connection
-(async () => {
+// MongoDB Connection URI
+const uri = "mongodb://localhost:27017";
+const client = new MongoClient(uri);
+const dbName = "notesApp";
+
+let db;
+
+// Connect to MongoDB
+async function connectToDB() {
     try {
-        const client = await MongoClient.connect(url, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+        await client.connect();
         db = client.db(dbName);
-        console.log("Connected to database");
+        console.log("Connected to MongoDB");
     } catch (error) {
-        console.error("Error connecting to database:", error);
-        process.exit(1); // Exit the application if DB connection fails
+        console.error("Failed to connect to MongoDB", error);
     }
-})();
+}
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+connectToDB();
 
 // Routes
 
-// Health Check Route
-app.get("/", (req, res) => {
-    res.status(200).json({ message: "Notes App API is running!" });
-});
-
-// Create Note
-app.post("/create-note", async (req, res) => {
-    try {
-        const { userId, content } = req.body;
-
-        // Validate Input
-        if (!userId || !content) {
-            return res.status(400).json({ error: "userId and content are required" });
-        }
-
-        const notesCollection = db.collection("notes");
-        const result = await notesCollection.insertOne({ userId, content });
-        res.status(201).json({
-            message: "Note added successfully",
-            noteId: result.insertedId,
-        });
-    } catch (error) {
-        console.error("Error creating note:", error);
-        res.status(500).json({ error: "Failed to add note" });
-    }
-});
-
-// Get Notes by User ID
+// Fetch all notes for a user
 app.get("/notes/:userId", async (req, res) => {
     try {
-        const { userId } = req.params;
-
-        // Validate Input
-        if (!userId) {
-            return res.status(400).json({ error: "userId is required" });
-        }
-
-        const notesCollection = db.collection("notes");
-        const notes = await notesCollection.find({ userId }).toArray();
-        res.status(200).json(notes);
+        const notes = await db.collection("notes").find({ userId: req.params.userId }).toArray();
+        res.json(notes);
     } catch (error) {
-        console.error("Error fetching notes:", error);
         res.status(500).json({ error: "Failed to fetch notes" });
     }
 });
 
-// Delete Note
+// Create a new note
+app.post("/create-note", async (req, res) => {
+    const { userId, content } = req.body;
+    if (!userId || !content) return res.status(400).json({ error: "User ID and content are required" });
+
+    try {
+        const result = await db.collection("notes").insertOne({ userId, content });
+        res.status(201).json({ message: "Note created successfully", noteId: result.insertedId });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to create note" });
+    }
+});
+
+// Delete a note
 app.delete("/delete-note/:id", async (req, res) => {
     try {
-        const { id } = req.params;
-
-        // Validate ID
-        if (!ObjectId.isValid(id)) {
-            return res.status(400).json({ error: "Invalid note ID" });
-        }
-
-        const notesCollection = db.collection("notes");
-        const result = await notesCollection.deleteOne({ _id: new ObjectId(id) });
-
-        if (result.deletedCount === 0) {
-            return res.status(404).json({ error: "Note not found" });
-        }
-
-        res.status(200).json({ message: "Note deleted successfully" });
+        const result = await db.collection("notes").deleteOne({ _id: new ObjectId(req.params.id) });
+        if (result.deletedCount === 0) return res.status(404).json({ error: "Note not found" });
+        res.json({ message: "Note deleted successfully" });
     } catch (error) {
-        console.error("Error deleting note:", error);
         res.status(500).json({ error: "Failed to delete note" });
     }
 });
+
+// Start the server
+app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));
