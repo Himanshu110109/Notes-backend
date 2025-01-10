@@ -34,6 +34,12 @@ app.listen(PORT, () => {
 });
 
 // Routes
+
+// Health Check Route
+app.get("/", (req, res) => {
+    res.status(200).json({ message: "Notes App API is running!" });
+});
+
 // Create Note
 app.post("/create-note", async (req, res) => {
     try {
@@ -68,9 +74,6 @@ app.get("/notes/:userId", async (req, res) => {
 
         const notesCollection = db.collection("notes");
         const notes = await notesCollection.find({ userId }).toArray();
-        if (notes.length === 0) {
-            return res.status(404).json({ error: "No notes found for this user" });
-        }
         res.status(200).json(notes);
     } catch (error) {
         console.error("Error fetching notes:", error);
@@ -100,9 +103,4 @@ app.delete("/delete-note/:id", async (req, res) => {
         console.error("Error deleting note:", error);
         res.status(500).json({ error: "Failed to delete note" });
     }
-});
-
-// Health Check Route
-app.get("/", (req, res) => {
-    res.status(200).json({ message: "Notes App API is running!" });
 });
